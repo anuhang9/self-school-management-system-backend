@@ -1,6 +1,7 @@
 import { Request, Response } from "express";
-import { SchoolAdmin } from "../model/user.model";
+import { SchoolAdmin } from "../model/auth.model";
 import bcrytpt from 'bcryptjs';
+import { generateTokenAndCookie } from "../utils/generateTokentAndsetCookeis";
 
 export const signup =async(req: Request, res: Response)=>{
 
@@ -30,7 +31,8 @@ export const signup =async(req: Request, res: Response)=>{
         const user = new SchoolAdmin({
             name, userName, email, password: hashPassword, verificationToken, verificationTokenExpiresAt: Date.now() + 15 * 60 * 1000
         })
-        await user.save()
+        await user.save();
+       generateTokenAndCookie(res, user.userName);
 
     }catch(error: unknown){
         if(error instanceof Error){
