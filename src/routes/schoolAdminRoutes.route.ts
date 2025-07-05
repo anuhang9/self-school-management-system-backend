@@ -1,8 +1,16 @@
 import express from "express";
-import { signup } from "../controllers/admin.controller";
+import { checkAuth, emailVerify, login, logout, signup } from "../controllers/admin.controller";
 
 const router = express.Router();
 
-router.post('/', signup)
+router.post('/check-auth', checkAuth);
+
+router.post('/signup', signup);
+
+router.post('/email-verify', emailVerify);
+
+router.post('/login', login);
+
+router.post('/logout', logout);
 
 export default router;

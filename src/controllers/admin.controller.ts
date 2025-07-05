@@ -1,7 +1,9 @@
 import { Request, Response } from "express";
 import { SchoolAdmin } from "../model/auth.model";
-import bcrytpt from 'bcryptjs';
+import bcrypt from 'bcryptjs';
 import { generateTokenAndCookie } from "../utils/generateTokentAndsetCookeis";
+import { sendMail } from "../lib/nodemailer.config";
+import { VERIFICATION_EMAIL_TEMPLATE } from "../lib/verificationTemplete";
 
 export const signup =async(req: Request, res: Response)=>{
 
@@ -25,21 +27,123 @@ export const signup =async(req: Request, res: Response)=>{
             return;
         }
 
-        const hashPassword = bcrytpt.hash(password, 10);
+        const hashPassword = await bcrypt.hash(password, 10);
         const verificationToken = Math.floor(10000 + Math.random()*10000);
 
         const user = new SchoolAdmin({
-            name, userName, email, password: hashPassword, verificationToken, verificationTokenExpiresAt: Date.now() + 15 * 60 * 1000
+            name, userName, email, password: hashPassword, verificationToken, verificationTokenExpiresAt: Date.now() + 15 * 60 * 1000,
         })
         await user.save();
-       generateTokenAndCookie(res, user.userName);
+        // json web token
+       generateTokenAndCookie(res, user._id.toString());
+
+       try{
+        // send mail is a promise so i need to use 'await sendMail().cattch' but i dont use because error hendle by tryp catch
+        await sendMail({
+            to: email,
+            subject: "otp verification",
+            html: VERIFICATION_EMAIL_TEMPLATE.replace(
+          "{verificationCode}",
+          `${verificationToken}`)
+        })
+        res.status(201).json({
+            success: true,
+            message: "otp verification sent.",
+            redirect: "/email-verify"
+        })
+       }catch(error: unknown){
+        if(error instanceof Error){
+            res.status(500).send({success: false, message: error.message});
+        }
+        else{
+            res.status(500).json({success: false, message: "something wrong to send verification message."});
+        }
+       }
 
     }catch(error: unknown){
         if(error instanceof Error){
-            res.status(500).json({success: false, message: error.message})
+            res.status(500).json({success: false, message: error.message});
         }
         else{
-            res.status(500).json({success: false, message: "unknow error appear in signup page"})
+            res.status(500).json({success: false, message: "unknow error appear in signup page"});
         }
     }
 }
+
+export const emailVerify =async(req: Request, res: Response)=>{
+    const {otpCode} = req.body;
+    try{
+        const user = await SchoolAdmin.findOne({
+            verificationToken: otpCode,
+            verificationTokenExpiresAt: {$gt: Date.now()}
+        })
+        if(!user){
+            res.status(400).send({success: false, message: "invalid token or expired."});
+            return;
+        }
+        user.isVerified = true;
+        user.verificationToken = undefined;
+        user.verificationTokenExpiresAt = undefined;
+        res.status(200).json({success: true, message: "email verification is successfull."});
+        await user.save()
+    }catch(error: unknown){
+        if(error instanceof Error){
+            res.status(500).json({success: false, message: error.message});
+        }
+        else{
+            res.status(500).json({success: false, message: "error appear in email verify page."});
+        }
+    }
+
+}
+
+export const login = async (req: Request, res: Response)=>{
+    const {userName, password} = req.body;
+    try{
+        const user = await SchoolAdmin.findOne({userName});
+
+        if(!user){
+            res.status(400).json({success: false, message: "incorrect credentials."});
+            return;
+        }
+
+        const isValidPassword = await bcrypt.compare(password, user.password);
+
+        if(!isValidPassword){
+            res.status(400).json({success: false, message: "incorrect credentials."});
+            return;
+        }
+
+        generateTokenAndCookie(res, user._id.toString());
+        user.lastLogin = new Date();
+        await user.save()
+
+        res.status(200).json({success: true, message: "login successfull."})
+
+    }catch(error){
+        if(error instanceof Error){
+            res.status(500).json({success: false, message: error.message });
+        }
+        else{
+        res.status(500).json({success: false, message: "error occurred in login page."});
+        }
+    }
+}
+
+export const logout = async(req: Request, res: Response)=>{
+    res.clearCookie("ssms");
+    res.status(200).json({success: true, message: "logout successfull."})
+}
+
+// export const checkAuth = async(req: Request, res: Response)=>{
+//     try{
+//         // res.status(200).json({success: true, message: "you are authenticated."})
+//     }catch(error){
+//         if(error instanceof Error){
+//             res.status(500).json({success: false, message: error.message});
+//         }
+//         else{
+//             res.status(500).json({success: false, message: "some error occurred in authentication."});
+//         }
+//     }
+// }
