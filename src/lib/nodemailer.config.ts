@@ -13,12 +13,13 @@ const transporter = nodemailer.createTransport({
 })
 interface EmailOption{
     to: string,
+    from: string,
     subject: string,
     html: string,
 }
-export const sendMail = async({to, subject, html}: EmailOption)=>{
+export const sendMail = async({to, from, subject, html}: EmailOption)=>{
     const info = await transporter.sendMail({
-        from: "school management system",
+        from,
         to,
         subject,
         html

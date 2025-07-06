@@ -4,6 +4,9 @@ import bcrypt from 'bcryptjs';
 import { generateTokenAndCookie } from "../utils/generateTokentAndsetCookeis";
 import { sendMail } from "../lib/nodemailer.config";
 import { VERIFICATION_EMAIL_TEMPLATE } from "../lib/verificationTemplete";
+import { PASSWORD_RECOVER_EMPLATE } from "../lib/passwordRecover";
+import { randomBytes } from "crypto";
+import { env } from "process";
 
 export const signup =async(req: Request, res: Response)=>{
 
@@ -36,10 +39,9 @@ export const signup =async(req: Request, res: Response)=>{
         await user.save();
         // json web token
        generateTokenAndCookie(res, user._id.toString());
-
-       try{
         // send mail is a promise so i need to use 'await sendMail().cattch' but i dont use because error hendle by tryp catch
         await sendMail({
+            from: "school management system",
             to: email,
             subject: "otp verification",
             html: VERIFICATION_EMAIL_TEMPLATE.replace(
@@ -51,14 +53,6 @@ export const signup =async(req: Request, res: Response)=>{
             message: "otp verification sent.",
             redirect: "/email-verify"
         })
-       }catch(error: unknown){
-        if(error instanceof Error){
-            res.status(500).send({success: false, message: error.message});
-        }
-        else{
-            res.status(500).json({success: false, message: "something wrong to send verification message."});
-        }
-       }
 
     }catch(error: unknown){
         if(error instanceof Error){
@@ -135,15 +129,83 @@ export const logout = async(req: Request, res: Response)=>{
     res.status(200).json({success: true, message: "logout successfull."})
 }
 
-// export const checkAuth = async(req: Request, res: Response)=>{
-//     try{
-//         // res.status(200).json({success: true, message: "you are authenticated."})
-//     }catch(error){
-//         if(error instanceof Error){
-//             res.status(500).json({success: false, message: error.message});
-//         }
-//         else{
-//             res.status(500).json({success: false, message: "some error occurred in authentication."});
-//         }
-//     }
-// }
+export const forgetPassword = async(req: Request, res: Response)=>{
+    const {email} = req.body;
+    try{
+        const user = await SchoolAdmin.findOne({email});
+        if(!user){
+            res.status(400).json({success: false, message: "pleas enter valid email."})
+            return;
+        }
+        const resetToken = randomBytes(20).toString("hex");
+        const resetPasswordExpiresAt = new Date(Date.now()+ 1000*15)
+
+        user.resetPasswordToken = resetToken;
+        user.resetPasswordTokenExpiresAt = resetPasswordExpiresAt;
+
+        await user.save()
+
+        const urlResetPassword = `http://${process.env.URL_LOCAL_HOST}/reset-passowrd=${resetToken}&user-name${user.userName}`
+
+        res.status(200).json({success: true, message: "please check your email.", redirect: '/reset-password'})
+
+        await sendMail({
+            from: "school management system", 
+            to: user.email,
+            subject: "recover password",
+            html: PASSWORD_RECOVER_EMPLATE.replace("{resetUrl}", urlResetPassword)
+        })
+
+    }catch(error){
+        if(error instanceof Error){
+            res.status(500).json({success: false, message: error.message})
+        }
+        else{
+            res.status(500).json({success: false, message: "some error occurred in forget passowrd."})
+        }
+    }
+}
+
+export const resetPassword = async(req: Request, res: Response)=>{
+    const {password} = req.body;
+    const {token} = req.params;
+    try{
+        const user = await SchoolAdmin.findOne({
+            resetPasswordToken: token,
+            resetPasswordTokenExpiresAt: {gt: Date.now()}
+        })
+
+        if(!user){
+            res.status(400).json({success: false, message: "enter valid token."})
+            return;
+        }
+
+        const hashPassword = await bcrypt.hash(password, 10);
+
+        user.password = hashPassword;
+        user.resetPasswordToken = undefined;
+        user.resetPasswordTokenExpiresAt = undefined;
+        await user.save();
+
+    }catch(error){
+        if(error instanceof Error){
+            res.status(500).json({success: false, message: error.message})
+        }
+        else{
+            res.status(500).json({success: false, message: "error appeared in reset password page please contact software provider. thank you."})
+        }
+    }
+}
+
+export const checkAuth = async(req: Request, res: Response)=>{
+    try{
+        // res.status(200).json({success: true, message: "you are authenticated."})
+    }catch(error){
+        if(error instanceof Error){
+            res.status(500).json({success: false, message: error.message});
+        }
+        else{
+            res.status(500).json({success: false, message: "some error occurred in authentication."});
+        }
+    }
+}
