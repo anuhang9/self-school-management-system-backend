@@ -1,6 +1,6 @@
 import nodemailer from 'nodemailer';
 import dotenv from 'dotenv';
-import { url } from 'inspector';
+import { EmailOption } from '../interfaces/nodemailerConfig';
 
 dotenv.config();
 
@@ -11,12 +11,7 @@ const transporter = nodemailer.createTransport({
         pass: process.env.NODE_MAILER_PASSWORD
     }
 })
-interface EmailOption{
-    to: string,
-    from: string,
-    subject: string,
-    html: string,
-}
+
 export const sendMail = async({to, from, subject, html}: EmailOption)=>{
     const info = await transporter.sendMail({
         from,

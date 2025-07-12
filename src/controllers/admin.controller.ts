@@ -197,9 +197,23 @@ export const resetPassword = async(req: Request, res: Response)=>{
     }
 }
 
-export const checkAuth = async(req: Request, res: Response)=>{
+
+interface AuthRequest extends Request{
+    userId?: string;
+}
+export const checkAuth = async(req: AuthRequest, res: Response)=>{
     try{
         // res.status(200).json({success: true, message: "you are authenticated."})
+        if(!req.userId){
+            res.status(401).json({success: false, message: "unuthorized token not provided"})
+            return;
+        }
+        const user = await SchoolAdmin.findById(req.userId).select("-password");
+        if(!user){
+            res.status(400).json({success: false, message: "user not found"})
+            return;
+        }
+        res.status(200).json({success: false, message: "user authenticated"})
     }catch(error){
         if(error instanceof Error){
             res.status(500).json({success: false, message: error.message});
